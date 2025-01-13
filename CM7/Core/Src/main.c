@@ -50,7 +50,11 @@
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
+  BMP280_CalibrationData calib_data;
 
+
+  char uart_msg[50];
+  float temperature;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -123,27 +127,32 @@ Error_Handler();
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
   MX_I2C1_Init();
-  MX_TIM1_Init();
   MX_USART3_UART_Init();
+  MX_TIM2_Init();
   /* USER CODE BEGIN 2 */
   BMP280_Init(&hi2c1);
 
-  BMP280_CalibrationData calib_data;
+
   BMP280_ReadCalibrationData(&hi2c1, &calib_data);
 
-  char uart_msg[50];
-  float temperature;
+
+
+
+
+
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
+  HAL_TIM_Base_Start_IT(&htim2);
   while (1)
   {
+
+
+
     /* USER CODE END WHILE */
-	  temperature = BMP280_ReadTemperature(&hi2c1, &calib_data);
-	        snprintf(uart_msg, sizeof(uart_msg), "Temperature: %.2f C\r\n", temperature);
-	        HAL_UART_Transmit(&huart3, (uint8_t *)uart_msg, strlen(uart_msg), HAL_MAX_DELAY);
-	        HAL_Delay(1000); // Delay 1 second
+
     /* USER CODE BEGIN 3 */
   }
   /* USER CODE END 3 */
@@ -200,7 +209,21 @@ void SystemClock_Config(void)
 }
 
 /* USER CODE BEGIN 4 */
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
+{
+  if (htim->Instance == TIM2)
+  {
+    // Timer interrupt triggered, perform UART transmission here
+    temperature = BMP280_ReadTemperature(&hi2c1, &calib_data);
+    char uart_msg[50];
+    snprintf(uart_msg, sizeof(uart_msg), "Temperature: %.2f C\r\n", temperature);
 
+    if (HAL_UART_Transmit(&huart3, (uint8_t *)uart_msg, strlen(uart_msg), HAL_MAX_DELAY) != HAL_OK)
+    {
+      Error_Handler();  // If UART fails, call error handler
+    }
+  }
+}
 /* USER CODE END 4 */
 
 /**
