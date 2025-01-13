@@ -1,0 +1,3 @@
+../Core/Src/bmp2.c:4:6:BMP280_Init	32	static
+../Core/Src/bmp2.c:18:6:BMP280_ReadCalibrationData	56	static
+../Core/Src/bmp2.c:30:7:BMP280_ReadTemperature	56	static
