@@ -136,11 +136,6 @@ Error_Handler();
   BMP280_ReadCalibrationData(&hi2c1, &calib_data);
 
 
-
-
-
-
-
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -148,8 +143,6 @@ Error_Handler();
   HAL_TIM_Base_Start_IT(&htim2);
   while (1)
   {
-
-
 
     /* USER CODE END WHILE */
 
@@ -218,10 +211,8 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
     char uart_msg[50];
     snprintf(uart_msg, sizeof(uart_msg), "Temperature: %.2f C\r\n", temperature);
 
-    if (HAL_UART_Transmit(&huart3, (uint8_t *)uart_msg, strlen(uart_msg), HAL_MAX_DELAY) != HAL_OK)
-    {
-      Error_Handler();  // If UART fails, call error handler
-    }
+    HAL_UART_Transmit(&huart3, (uint8_t *)uart_msg, strlen(uart_msg), HAL_MAX_DELAY);
+
   }
 }
 /* USER CODE END 4 */
