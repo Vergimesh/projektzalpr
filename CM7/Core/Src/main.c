@@ -60,6 +60,13 @@
   uint32_t liczba_pom=0;
   char wejscie[4];
   char pomoc[3];
+  uint32_t wartosc=30;
+  float kp=5;
+  float ki=0.7;
+  float kd=0;
+  pid_str pid_controller;
+  char uchyb[50];
+  char sygnal[50];
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -146,6 +153,8 @@ Error_Handler();
   HAL_TIM_Base_Init(&htim3);
   HAL_TIM_Base_Start(&htim3);
   HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_3);
+
+  pid_init(&pid_controller,  kp,  ki,  kd,5000);
 
   /* USER CODE END 2 */
 
@@ -239,10 +248,30 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
   {
     // Timer interrupt triggered, perform UART transmission here
     temperature = BMP280_ReadTemperature(&hi2c1, &calib_data);
+    int pid_output = pid_calculate(&pid_controller, wartosc, temperature);
+
+
+    // Definicja zakresu PID
+    int min_pid = -5000; // Minimalna wartość wyjścia PID
+    int max_pid = 5000;  // Maksymalna wartość wyjścia PID
+
+           // Skalowanie wyniku PID na zakres 0-100
+     int scaled_output = (int)((float)(pid_output - min_pid) / (max_pid - min_pid) * 100.0f);
+
+           // Ograniczenie wyniku do zakresu 0-100
+     if (scaled_output < 0) scaled_output = 0;
+     if (scaled_output > 100) scaled_output = 100;
+
+           // Ustawienie wypełnienia PWM
+     __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_3, (scaled_output * htim3.Init.Period) / 100);
     char uart_msg[50];
     snprintf(uart_msg, sizeof(uart_msg), "Temperature: %.2f C\r\n", temperature);
 
     HAL_UART_Transmit(&huart3, (uint8_t *)uart_msg, strlen(uart_msg), HAL_MAX_DELAY);
+    char sygnal[50];
+    snprintf(sygnal, sizeof(sygnal), "sygnal sterujacy: %.2f \r\n", pid_output);
+
+    HAL_UART_Transmit(&huart3, (uint8_t *)sygnal, strlen(sygnal), HAL_MAX_DELAY);
 
   }
 }
