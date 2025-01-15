@@ -26,6 +26,8 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "bmp2.h"
+#include "pid.h"
+
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -55,6 +57,9 @@
 
   char uart_msg[50];
   float temperature;
+  uint32_t liczba_pom=0;
+  char wejscie[4];
+  char pomoc[3];
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -129,12 +134,18 @@ Error_Handler();
   MX_I2C1_Init();
   MX_USART3_UART_Init();
   MX_TIM2_Init();
+  MX_TIM3_Init();
   /* USER CODE BEGIN 2 */
   BMP280_Init(&hi2c1);
 
 
   BMP280_ReadCalibrationData(&hi2c1, &calib_data);
-
+  HAL_TIM_PWM_Stop(&htim3, TIM_CHANNEL_3);
+  __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_3, 0);
+  	  htim3.Init.Period = 999;
+  HAL_TIM_Base_Init(&htim3);
+  HAL_TIM_Base_Start(&htim3);
+  HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_3);
 
   /* USER CODE END 2 */
 
@@ -143,6 +154,26 @@ Error_Handler();
   HAL_TIM_Base_Start_IT(&htim2);
   while (1)
   {
+
+	  	  HAL_UART_Receive(&huart3, wejscie, 4, 10);
+	 	  if(strncmp("R", (char*)wejscie,1 )==0)
+	 	  {
+
+	 		  pomoc[0]=wejscie[1];
+	 		  pomoc[1]=wejscie[2];
+	 		  pomoc[2]=wejscie[3];
+	 		  liczba_pom = atoi(pomoc);
+	 		  HAL_UART_Transmit(&huart3, "R", 1, 10);
+	 		  HAL_UART_Transmit(&huart3, pomoc, 3, 10);
+	 		  memcpy ( wejscie , " " , 3 ) ;
+
+	 		  HAL_TIM_PWM_Stop(&htim3, TIM_CHANNEL_3);
+	 		   __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_3, liczba_pom*10);
+	 		   htim3.Init.Period = 999;
+	 		   HAL_TIM_Base_Init(&htim3);
+	 		   HAL_TIM_Base_Start(&htim3);
+	 		   HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_3);
+	 	  }
 
     /* USER CODE END WHILE */
 
