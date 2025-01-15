@@ -15,7 +15,7 @@ typedef struct
 
 void pid_init(pid_str *pid_data, float kp_init, float ki_init, float kd_init, int anti_windup_limit_init);
 void pid_reset(pid_str *pid_data);
-int pid_calculate(pid_str *pid_data, int setpoint, int process_variable);
+int pid_calculate(pid_str *pid_data, float setpoint, float process_variable);
 
 
 #endif /* INC_PID_H_ */
