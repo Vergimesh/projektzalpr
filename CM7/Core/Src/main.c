@@ -60,15 +60,16 @@
   uint32_t liczba_pom=0;
   char wejscie[4];
   char pomoc[3];
-  int wartosc=30;
-  float kp=20;
-  float ki=0.5;
-  float kd=0.1;
+  int wartosc=28;
+  float kp=10;
+  float ki=0.8;
+  float kd=0;
   pid_str pid_controller;
   char uchyb[50];
   char sygnal[50];
   float pid_output=0;
-  int scaled_output=0;
+  float scaled_output=0;
+  int final_output=0;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -252,25 +253,41 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
     temperature = BMP280_ReadTemperature(&hi2c1, &calib_data);
     pid_output = pid_calculate(&pid_controller, wartosc, temperature);
 
+    char pid[50];
+    snprintf(pid, sizeof(pid), "sygnal z pid: %.2f \r\n", pid_output);
+
+    HAL_UART_Transmit(&huart3, (uint8_t *)pid, strlen(pid), HAL_MAX_DELAY);
+
 
     // Definicja zakresu PID
-    int min_pid = -5000; // Minimalna wartość wyjścia PID
-    int max_pid = 5000;  // Maksymalna wartość wyjścia PID
+    int min_pid = 0; // Minimalna wartość wyjścia PID
+    int max_pid = 10;  // Maksymalna wartość wyjścia PID
 
            // Skalowanie wyniku PID na zakres 0-100
-     scaled_output = (int)((float)(pid_output - min_pid) / (max_pid - min_pid) * 100.0f);
-
-           // Ograniczenie wyniku do zakresu 0-100
-     if (scaled_output < 0) scaled_output = 0;
-     if (scaled_output > 100) scaled_output = 100;
+    scaled_output = ((pid_output - min_pid) / (float)(max_pid - min_pid))*100.0;
      char sygnal[50];
+
+
      snprintf(sygnal, sizeof(sygnal), "sygnal sterujacy: %.2f \r\n", scaled_output);
 
      HAL_UART_Transmit(&huart3, (uint8_t *)sygnal, strlen(sygnal), HAL_MAX_DELAY);
 
+     if (scaled_output < 0.0) {
+         final_output = 0;
+     } else if (scaled_output > 100.0) {
+         final_output = 100;
+     } else {
+         final_output = (int)scaled_output;  // rzutowanie na int
+     }
+
+     char ost[50];
+     snprintf(ost, sizeof(ost), "sygnal finalny: %d \r\n", final_output);
+
+     HAL_UART_Transmit(&huart3, (uint8_t *)ost, strlen(ost), HAL_MAX_DELAY);
+
 
            // Ustawienie wypełnienia PWM
-     __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_3, (scaled_output * htim3.Init.Period) / 100);
+     __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_3, final_output  * 10);
     char uart_msg[50];
     snprintf(uart_msg, sizeof(uart_msg), "Temperature: %.2f C\r\n", temperature);
 

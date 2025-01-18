@@ -28,8 +28,8 @@ int pid_calculate(pid_str *pid_data, float setpoint, float process_variable)
 	    float i_term = pid_data->Ki * pid_data->total_error;
 	    float d_term = pid_data->Kd * (error - pid_data->previous_error);
 
-	    if (i_term > pid_data->anti_windup_limit) i_term = pid_data->anti_windup_limit;
-	    if (i_term < -pid_data->anti_windup_limit) i_term = -pid_data->anti_windup_limit;
+	    if (i_term > pid_data->anti_windup_limit){ i_term = pid_data->anti_windup_limit;}
+	    if (i_term < -pid_data->anti_windup_limit) {i_term = -pid_data->anti_windup_limit;}
 
 	    pid_data->previous_error = error;
 
