@@ -1,6 +1,6 @@
 #include "pid.h"
 
-void pid_init(pid_str *pid_data, float kp_init, float ki_init, float kd_init, int anti_windup_limit_init)
+void pid_init(pid_str *pid_data, float kp_init, float ki_init, float kd_init, float anti_windup_limit_init)
 {
 	pid_data->previous_error = 0;
 	pid_data->total_error = 0;
@@ -18,10 +18,10 @@ void pid_reset(pid_str *pid_data)
 	pid_data->previous_error = 0;
 }
 
-int pid_calculate(pid_str *pid_data, float setpoint, float process_variable)
+float pid_calculate(pid_str *pid_data, float setpoint, float process_variable)
 {
 	 float error = setpoint - process_variable;
-	    printf("Setpoint: %.2f, Process variable: %.2f, Error: %.2f\n", setpoint, process_variable, error);
+
 
 	    pid_data->total_error += error;
 	    float p_term = pid_data->Kp * error;
@@ -34,6 +34,5 @@ int pid_calculate(pid_str *pid_data, float setpoint, float process_variable)
 	    pid_data->previous_error = error;
 
 	    float output = (float)(p_term + i_term + d_term);
-	    printf("PID output: %d\n", output);
 	    return output;
 }

@@ -27,7 +27,9 @@
 /* USER CODE BEGIN Includes */
 #include "bmp2.h"
 #include "pid.h"
-
+#include <stdint.h>
+#include <stdbool.h>
+#include <stdio.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -57,19 +59,22 @@
 
   char uart_msg[50];
   float temperature;
-  uint32_t liczba_pom=0;
-  char wejscie[4];
-  char pomoc[3];
-  int wartosc=28;
-  float kp=10;
+  float liczba_pom=0.0;
+  char wejscie[10];
+  char pomoc[6];
+  double wartosc1=0.0;
+  float wartosc =28.0f;
+  float kp=10.0;
   float ki=0.8;
-  float kd=0;
+  float kd=0.0;
   pid_str pid_controller;
   char uchyb[50];
   char sygnal[50];
-  float pid_output=0;
-  float scaled_output=0;
+  float pid_output=0.0;
+  float scaled_output=0.0;
   int final_output=0;
+
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -164,28 +169,15 @@ Error_Handler();
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   HAL_TIM_Base_Start_IT(&htim2);
+  HAL_UART_Receive_IT(&huart3, wejscie, 5);
+
+
+
+
   while (1)
   {
 
-	  	  HAL_UART_Receive(&huart3, wejscie, 4, 10);
-	 	  if(strncmp("R", (char*)wejscie,1 )==0)
-	 	  {
 
-	 		  pomoc[0]=wejscie[1];
-	 		  pomoc[1]=wejscie[2];
-	 		  pomoc[2]=wejscie[3];
-	 		  liczba_pom = atoi(pomoc);
-	 		  HAL_UART_Transmit(&huart3, "R", 1, 10);
-	 		  HAL_UART_Transmit(&huart3, pomoc, 3, 10);
-	 		  memcpy ( wejscie , " " , 3 ) ;
-
-	 		  HAL_TIM_PWM_Stop(&htim3, TIM_CHANNEL_3);
-	 		   __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_3, liczba_pom*10);
-	 		   htim3.Init.Period = 999;
-	 		   HAL_TIM_Base_Init(&htim3);
-	 		   HAL_TIM_Base_Start(&htim3);
-	 		   HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_3);
-	 	  }
 
     /* USER CODE END WHILE */
 
@@ -295,6 +287,35 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 
   }
 }
+
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
+{
+    if (huart->Instance == USART3) {
+        // Sprawdzamy, czy odebrano poprawne dane
+        if (strncmp("B", (char*)wejscie, 1) == 0) {
+        	 pomoc[0] = wejscie[1];
+        	    pomoc[1] = wejscie[2];
+        	    pomoc[2] = wejscie[3];
+        	    pomoc[3] = wejscie[4];  // Dodajemy czwarty znak (część dziesiętna)
+        	    pomoc[4] = '\0';  // Zakończenie stringa
+        	HAL_UART_Transmit(&huart3, pomoc, 4, 10);
+            // Konwertujemy na float
+//        	wartosc = atof(pomoc);
+            // Wysyłamy wynik przez UART
+            char transmit_msg[10];
+            snprintf(transmit_msg, sizeof(transmit_msg), "R%.1f", wartosc);
+            HAL_UART_Transmit(&huart3, (uint8_t*)transmit_msg, strlen(transmit_msg), 10);
+
+            // Czyszczenie bufora wejściowego, aby gotowy był do kolejnego odbioru
+            memset(wejscie, ' ', 10);
+
+            // Zainicjuj ponownie odbiór danych w trybie przerwania
+            HAL_UART_Receive_IT(huart, (uint8_t*)wejscie, 10);
+        }
+    }
+}
+
+
 /* USER CODE END 4 */
 
 /**
