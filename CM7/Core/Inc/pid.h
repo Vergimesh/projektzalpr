@@ -10,7 +10,9 @@ typedef struct
 	float Kp;			//Wzmocnienie członu proporcjonalnego
 	float Ki;			//Wzmocnienie członu całkującego*/
 	float Kd;			//Wzmocnienie członu różniczkującego*/
-	float anti_windup_limit;		//Anti-Windup - ograniczenie członu całkującego*/
+	float anti_windup_limit;
+	float previous_i_term;
+									//Anti-Windup - ograniczenie członu całkującego*/
 }pid_str;
 
 void pid_init(pid_str *pid_data, float kp_init, float ki_init, float kd_init, float anti_windup_limit_init);

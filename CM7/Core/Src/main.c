@@ -30,6 +30,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <stdio.h>
+#include <math.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -60,20 +61,19 @@
   char uart_msg[50];
   float temperature;
   float liczba_pom=0.0;
-  char wejscie[10];
-  char pomoc[6];
-  double wartosc1=0.0;
+  char wejscie[3];
+  char pomoc[2];
   float wartosc =28.0f;
-  float kp=10.0;
-  float ki=0.8;
-  float kd=0.0;
+  float kp=8000.0;
+  float ki=1500.0;
+  float kd=100.0;
   pid_str pid_controller;
   char uchyb[50];
   char sygnal[50];
   float pid_output=0.0;
   float scaled_output=0.0;
   int final_output=0;
-
+  //float sigmoid(float x) {return 2.0 * (1.0 / (1.0 + exp(-0.5*x)) - 0.5);}
 
 /* USER CODE END PV */
 
@@ -164,15 +164,13 @@ Error_Handler();
 
   pid_init(&pid_controller,  kp,  ki,  kd,5000);
 
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   HAL_TIM_Base_Start_IT(&htim2);
-  HAL_UART_Receive_IT(&huart3, wejscie, 5);
-
-
-
+  HAL_UART_Receive_IT(&huart3, wejscie, 3);
 
   while (1)
   {
@@ -253,10 +251,12 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 
     // Definicja zakresu PID
     int min_pid = 0; // Minimalna wartość wyjścia PID
-    int max_pid = 10;  // Maksymalna wartość wyjścia PID
+    int max_pid = 1000;  // Maksymalna wartość wyjścia PID
 
            // Skalowanie wyniku PID na zakres 0-100
-    scaled_output = ((pid_output - min_pid) / (float)(max_pid - min_pid))*100.0;
+    scaled_output = ((pid_output - min_pid) / (float)(max_pid - min_pid))*1000.0;
+
+     //scaled_output =  sigmoid(pid_output)*100;
      char sygnal[50];
 
 
@@ -266,8 +266,8 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 
      if (scaled_output < 0.0) {
          final_output = 0;
-     } else if (scaled_output > 100.0) {
-         final_output = 100;
+     } else if (scaled_output > 1000.0) {
+         final_output = 1000;
      } else {
          final_output = (int)scaled_output;  // rzutowanie na int
      }
@@ -279,7 +279,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 
 
            // Ustawienie wypełnienia PWM
-     __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_3, final_output  * 10);
+     __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_3, final_output);
     char uart_msg[50];
     snprintf(uart_msg, sizeof(uart_msg), "Temperature: %.2f C\r\n", temperature);
 
@@ -293,25 +293,24 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
     if (huart->Instance == USART3) {
         // Sprawdzamy, czy odebrano poprawne dane
         if (strncmp("B", (char*)wejscie, 1) == 0) {
-        	 pomoc[0] = wejscie[1];
+        	 	pomoc[0] = wejscie[1];
         	    pomoc[1] = wejscie[2];
-        	    pomoc[2] = wejscie[3];
-        	    pomoc[3] = wejscie[4];  // Dodajemy czwarty znak (część dziesiętna)
-        	    pomoc[4] = '\0';  // Zakończenie stringa
-        	HAL_UART_Transmit(&huart3, pomoc, 4, 10);
+        	HAL_UART_Transmit(&huart3, pomoc, 3, 10);
             // Konwertujemy na float
-//        	wartosc = atof(pomoc);
+        	wartosc =(float) atoi(pomoc)+0.1f;
+
             // Wysyłamy wynik przez UART
             char transmit_msg[10];
             snprintf(transmit_msg, sizeof(transmit_msg), "R%.1f", wartosc);
             HAL_UART_Transmit(&huart3, (uint8_t*)transmit_msg, strlen(transmit_msg), 10);
 
             // Czyszczenie bufora wejściowego, aby gotowy był do kolejnego odbioru
-            memset(wejscie, ' ', 10);
+            memset(wejscie, ' ', 3);
 
             // Zainicjuj ponownie odbiór danych w trybie przerwania
-            HAL_UART_Receive_IT(huart, (uint8_t*)wejscie, 10);
+
         }
+        HAL_UART_Receive_IT(&huart3, (uint8_t*)wejscie, 3);
     }
 }
 
