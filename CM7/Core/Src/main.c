@@ -64,6 +64,7 @@
   char wejscie[3];
   char pomoc[2];
   float wartosc =28.0f;
+  float wartosc_spr =0.0f;
   float kp=8000.0;
   float ki=1500.0;
   float kd=100.0;
@@ -73,6 +74,7 @@
   float pid_output=0.0;
   float scaled_output=0.0;
   int final_output=0;
+  int licznik = 0;
   //float sigmoid(float x) {return 2.0 * (1.0 / (1.0 + exp(-0.5*x)) - 0.5);}
 
 /* USER CODE END PV */
@@ -242,12 +244,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
     // Timer interrupt triggered, perform UART transmission here
     temperature = BMP280_ReadTemperature(&hi2c1, &calib_data);
     pid_output = pid_calculate(&pid_controller, wartosc, temperature);
-
-    char pid[50];
-    snprintf(pid, sizeof(pid), "sygnal z pid: %.2f \r\n", pid_output);
-
-    HAL_UART_Transmit(&huart3, (uint8_t *)pid, strlen(pid), HAL_MAX_DELAY);
-
+    licznik = licznik + 1;
 
     // Definicja zakresu PID
     int min_pid = 0; // Minimalna wartość wyjścia PID
@@ -257,12 +254,6 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
     scaled_output = ((pid_output - min_pid) / (float)(max_pid - min_pid))*1000.0;
 
      //scaled_output =  sigmoid(pid_output)*100;
-     char sygnal[50];
-
-
-     snprintf(sygnal, sizeof(sygnal), "sygnal sterujacy: %.2f \r\n", scaled_output);
-
-     HAL_UART_Transmit(&huart3, (uint8_t *)sygnal, strlen(sygnal), HAL_MAX_DELAY);
 
      if (scaled_output < 0.0) {
          final_output = 0;
@@ -271,19 +262,21 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
      } else {
          final_output = (int)scaled_output;  // rzutowanie na int
      }
-
-     char ost[50];
-     snprintf(ost, sizeof(ost), "sygnal finalny: %d \r\n", final_output);
-
-     HAL_UART_Transmit(&huart3, (uint8_t *)ost, strlen(ost), HAL_MAX_DELAY);
-
-
            // Ustawienie wypełnienia PWM
      __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_3, final_output);
-    char uart_msg[50];
-    snprintf(uart_msg, sizeof(uart_msg), "Temperature: %.2f C\r\n", temperature);
+     if (licznik==100)
+     {
+    	 char msg[50];
+    	 snprintf(msg, sizeof(msg), "Wypełnienie na 1000: %d \r\n", final_output);
 
-    HAL_UART_Transmit(&huart3, (uint8_t *)uart_msg, strlen(uart_msg), HAL_MAX_DELAY);
+    	 HAL_UART_Transmit(&huart3, (uint8_t *)msg, strlen(msg), HAL_MAX_DELAY);
+    	 char uart_msg[50];
+    	 snprintf(uart_msg, sizeof(uart_msg), "Temperature: %.2f C\r\n", temperature);
+
+    	 HAL_UART_Transmit(&huart3, (uint8_t *)uart_msg, strlen(uart_msg), HAL_MAX_DELAY);
+    	 licznik=0;
+     }
+
 
   }
 }
@@ -297,18 +290,21 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
         	    pomoc[1] = wejscie[2];
         	HAL_UART_Transmit(&huart3, pomoc, 3, 10);
             // Konwertujemy na float
-        	wartosc =(float) atoi(pomoc)+0.1f;
 
-            // Wysyłamy wynik przez UART
-            char transmit_msg[10];
-            snprintf(transmit_msg, sizeof(transmit_msg), "R%.1f", wartosc);
-            HAL_UART_Transmit(&huart3, (uint8_t*)transmit_msg, strlen(transmit_msg), 10);
+        	wartosc_spr =(float) atoi(pomoc);
 
-            // Czyszczenie bufora wejściowego, aby gotowy był do kolejnego odbioru
-            memset(wejscie, ' ', 3);
+        	if (wartosc_spr>40 || wartosc_spr<20){
+        		HAL_UART_Transmit(&huart3, "WARTOSC POZA ZAKRESEM BEZPIECZNYM 20-40 !!!", strlen("WARTOSC POZA ZAKRESEM BEZPIECZNYM 20-40 !!!"), 10);
+        	}
+        	else{
+        			wartosc = wartosc_spr;
+        		 // Wysyłamy wynik przez UART
+        		 char transmit_msg[10];
+        		 snprintf(transmit_msg, sizeof(transmit_msg), "%.1f", wartosc);
+        		 HAL_UART_Transmit(&huart3, (uint8_t*)transmit_msg, strlen(transmit_msg), 10);
+        		 memset(wejscie, ' ', 3);
 
-            // Zainicjuj ponownie odbiór danych w trybie przerwania
-
+        	}
         }
         HAL_UART_Receive_IT(&huart3, (uint8_t*)wejscie, 3);
     }
