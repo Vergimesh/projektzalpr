@@ -21,6 +21,7 @@
 #include "i2c.h"
 #include "tim.h"
 #include "usart.h"
+#include "usb_otg.h"
 #include "gpio.h"
 
 /* Private includes ----------------------------------------------------------*/
@@ -31,6 +32,7 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include <math.h>
+#include "lcd_i2c.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -75,6 +77,7 @@
   float scaled_output=0.0;
   int final_output=0;
   int licznik = 0;
+  struct lcd_disp disp;
   //float sigmoid(float x) {return 2.0 * (1.0 / (1.0 + exp(-0.5*x)) - 0.5);}
 
 /* USER CODE END PV */
@@ -152,6 +155,8 @@ Error_Handler();
   MX_USART3_UART_Init();
   MX_TIM2_Init();
   MX_TIM3_Init();
+  MX_I2C2_Init();
+  MX_USB_OTG_FS_PCD_Init();
   /* USER CODE BEGIN 2 */
   BMP280_Init(&hi2c1);
 
@@ -166,6 +171,11 @@ Error_Handler();
 
   pid_init(&pid_controller,  kp,  ki,  kd,5000);
 
+  	  disp.addr = (0x27 << 1);
+    disp.bl = true;
+    lcd_init(&disp);
+
+
 
   /* USER CODE END 2 */
 
@@ -176,6 +186,14 @@ Error_Handler();
 
   while (1)
   {
+ 	 char sygnal[50];
+ 	 snprintf(sygnal, sizeof(sygnal), "Sygnal: %d \r\n", final_output);
+ 	 char tempe[50];
+ 	 snprintf(tempe, sizeof(tempe), "Temp: %.2f C\r\n", temperature);
+	     sprintf((char *)disp.f_line, sygnal);
+	     sprintf((char *)disp.s_line, tempe);
+	     lcd_display(&disp);
+	     HAL_Delay(500);
 
 
 
@@ -208,9 +226,10 @@ void SystemClock_Config(void)
   /** Initializes the RCC Oscillators according to the specified parameters
   * in the RCC_OscInitTypeDef structure.
   */
-  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI;
+  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI48|RCC_OSCILLATORTYPE_HSI;
   RCC_OscInitStruct.HSIState = RCC_HSI_DIV1;
   RCC_OscInitStruct.HSICalibrationValue = RCC_HSICALIBRATION_DEFAULT;
+  RCC_OscInitStruct.HSI48State = RCC_HSI48_ON;
   RCC_OscInitStruct.PLL.PLLState = RCC_PLL_NONE;
   if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
   {
@@ -262,12 +281,13 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
      } else {
          final_output = (int)scaled_output;  // rzutowanie na int
      }
+
            // Ustawienie wypełnienia PWM
      __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_3, final_output);
-     if (licznik==100)
+     if (licznik==50)
      {
     	 char msg[50];
-    	 snprintf(msg, sizeof(msg), "Wypełnienie na 1000: %d \r\n", final_output);
+    	 snprintf(msg, sizeof(msg), "Wypełnienie: %d \r\n", final_output);
 
     	 HAL_UART_Transmit(&huart3, (uint8_t *)msg, strlen(msg), HAL_MAX_DELAY);
     	 char uart_msg[50];
@@ -298,6 +318,7 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
         	}
         	else{
         			wartosc = wartosc_spr;
+        			pid_reset(&pid_controller);
         		 // Wysyłamy wynik przez UART
         		 char transmit_msg[10];
         		 snprintf(transmit_msg, sizeof(transmit_msg), "%.1f", wartosc);
