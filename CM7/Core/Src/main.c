@@ -21,7 +21,6 @@
 #include "i2c.h"
 #include "tim.h"
 #include "usart.h"
-#include "usb_otg.h"
 #include "gpio.h"
 
 /* Private includes ----------------------------------------------------------*/
@@ -33,6 +32,7 @@
 #include <stdio.h>
 #include <math.h>
 #include "lcd_i2c.h"
+
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -78,6 +78,12 @@
   int final_output=0;
   int licznik = 0;
   struct lcd_disp disp;
+  int min_pid = 0;
+  int max_pid = 1000;
+  float min_zak = 20.0f;
+  float max_zak = 40.0f;
+  float wartosc_enk = 0.0f;
+
   //float sigmoid(float x) {return 2.0 * (1.0 / (1.0 + exp(-0.5*x)) - 0.5);}
 
 /* USER CODE END PV */
@@ -156,7 +162,7 @@ Error_Handler();
   MX_TIM2_Init();
   MX_TIM3_Init();
   MX_I2C2_Init();
-  MX_USB_OTG_FS_PCD_Init();
+  MX_TIM8_Init();
   /* USER CODE BEGIN 2 */
   BMP280_Init(&hi2c1);
 
@@ -176,7 +182,7 @@ Error_Handler();
     lcd_init(&disp);
 
 
-
+    HAL_TIM_Encoder_Start(&htim8 , TIM_CHANNEL_ALL) ;
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -184,8 +190,25 @@ Error_Handler();
   HAL_TIM_Base_Start_IT(&htim2);
   HAL_UART_Receive_IT(&huart3, wejscie, 3);
 
+
+
   while (1)
   {
+	  uint32_t enkoder = __HAL_TIM_GET_COUNTER(&htim8);
+
+	  __HAL_TIM_SET_COUNTER(&htim8 , enkoder );
+	  wartosc_enk =(float) (enkoder/50+20);
+	  if(HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_0) == GPIO_PIN_SET)
+	  {
+	  char zmienna [20] ;
+	  snprintf(zmienna, sizeof(zmienna), "%.2f",wartosc_enk);
+	  HAL_UART_Transmit(&huart3 ,"Licznik:", strlen("Licznik:") ,1000 );
+	  HAL_UART_Transmit(&huart3 ,( uint8_t*) zmienna, strlen(zmienna) ,1000 );
+	  HAL_UART_Transmit(&huart3 ,( uint8_t*) "\r\n", strlen( "\r\n" ), 1000 );
+	  wartosc = wartosc_enk;
+	  }
+
+
  	 char sygnal[50];
  	 snprintf(sygnal, sizeof(sygnal), "Sygnal: %d \r\n", final_output);
  	 char tempe[50];
@@ -226,10 +249,9 @@ void SystemClock_Config(void)
   /** Initializes the RCC Oscillators according to the specified parameters
   * in the RCC_OscInitTypeDef structure.
   */
-  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI48|RCC_OSCILLATORTYPE_HSI;
+  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI;
   RCC_OscInitStruct.HSIState = RCC_HSI_DIV1;
   RCC_OscInitStruct.HSICalibrationValue = RCC_HSICALIBRATION_DEFAULT;
-  RCC_OscInitStruct.HSI48State = RCC_HSI48_ON;
   RCC_OscInitStruct.PLL.PLLState = RCC_PLL_NONE;
   if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
   {
@@ -256,6 +278,22 @@ void SystemClock_Config(void)
 }
 
 /* USER CODE BEGIN 4 */
+
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
+{
+	if (GPIO_Pin == GPIO_PIN_3)  // Sprawdzenie, czy to przycisk na PA3
+	    {
+	        if (HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_0) == GPIO_PIN_RESET)
+	        {
+	            HAL_GPIO_WritePin(GPIOB, GPIO_PIN_0, GPIO_PIN_SET);  // Włącz diodę
+	        }
+	        else
+	        {
+	            HAL_GPIO_WritePin(GPIOB, GPIO_PIN_0, GPIO_PIN_RESET); // Wyłącz diodę
+	        }
+	    }
+}
+
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 {
   if (htim->Instance == TIM2)
@@ -265,14 +303,8 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
     pid_output = pid_calculate(&pid_controller, wartosc, temperature);
     licznik = licznik + 1;
 
-    // Definicja zakresu PID
-    int min_pid = 0; // Minimalna wartość wyjścia PID
-    int max_pid = 1000;  // Maksymalna wartość wyjścia PID
-
-           // Skalowanie wyniku PID na zakres 0-100
     scaled_output = ((pid_output - min_pid) / (float)(max_pid - min_pid))*1000.0;
 
-     //scaled_output =  sigmoid(pid_output)*100;
 
      if (scaled_output < 0.0) {
          final_output = 0;
@@ -304,12 +336,12 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 {
     if (huart->Instance == USART3) {
-        // Sprawdzamy, czy odebrano poprawne dane
+    	if(HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_0) == GPIO_PIN_RESET){
+
         if (strncmp("B", (char*)wejscie, 1) == 0) {
         	 	pomoc[0] = wejscie[1];
         	    pomoc[1] = wejscie[2];
-        	HAL_UART_Transmit(&huart3, pomoc, 3, 10);
-            // Konwertujemy na float
+
 
         	wartosc_spr =(float) atoi(pomoc);
 
@@ -322,11 +354,15 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
         		 // Wysyłamy wynik przez UART
         		 char transmit_msg[10];
         		 snprintf(transmit_msg, sizeof(transmit_msg), "%.1f", wartosc);
+
+        		 HAL_UART_Transmit(&huart3 ,"ZADANE:", strlen("ZADANE:") ,1000 );
         		 HAL_UART_Transmit(&huart3, (uint8_t*)transmit_msg, strlen(transmit_msg), 10);
+        		 HAL_UART_Transmit(&huart3 ,( uint8_t*) "\r\n", strlen( "\r\n" ), 1000 );
         		 memset(wejscie, ' ', 3);
 
         	}
         }
+    	}
         HAL_UART_Receive_IT(&huart3, (uint8_t*)wejscie, 3);
     }
 }
